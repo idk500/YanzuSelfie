@@ -9,4 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: java -version
+      - run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
