@@ -1,7 +1,9 @@
 package com.yanzuselfie.app;
 
 import android.Manifest;
+import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -11,12 +13,17 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
+import android.view.LayoutInflater;
+import android.view.View;
 import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.*;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -53,8 +60,14 @@ public class MainActivity extends AppCompatActivity {
 
         previewView = findViewById(R.id.previewView);
         Button captureButton = findViewById(R.id.captureButton);
+        ImageButton infoButton = findViewById(R.id.infoButton);
+        ImageButton galleryButton = findViewById(R.id.galleryButton);
 
-        yanzuBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.logo_yanzu);
+        yanzuBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.yanzu);
+        Bitmap mosaicBitmap = createMosaicBitmap(yanzuBitmap);
+        if (mosaicBitmap != null) {
+            galleryButton.setImageBitmap(mosaicBitmap);
+        }
 
         cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -85,6 +98,48 @@ public class MainActivity extends AppCompatActivity {
             Toast.makeText(this, "拍照中...", Toast.LENGTH_SHORT).show();
             saveYanzuPhoto();
         });
+
+        infoButton.setOnClickListener(v -> showInfoDialog());
+        galleryButton.setOnClickListener(v -> openSystemGallery());
+    }
+
+    private Bitmap createMosaicBitmap(Bitmap source) {
+        if (source == null) {
+            return null;
+        }
+        int width = source.getWidth();
+        int height = source.getHeight();
+        int blockSize = 24;
+        int tinyWidth = Math.max(1, width / blockSize);
+        int tinyHeight = Math.max(1, height / blockSize);
+        Bitmap tiny = Bitmap.createScaledBitmap(source, tinyWidth, tinyHeight, false);
+        return Bitmap.createScaledBitmap(tiny, width, height, false);
+    }
+
+    private void openSystemGallery() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+            intent.setType("image/*");
+            startActivity(intent);
+        } catch (ActivityNotFoundException e) {
+            Toast.makeText(this, "未找到可用相册应用", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void showInfoDialog() {
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_info, null, false);
+        TextView versionText = dialogView.findViewById(R.id.versionText);
+        String versionInfo = getString(
+            R.string.version_format,
+            BuildConfig.VERSION_NAME,
+            BuildConfig.VERSION_CODE
+        );
+        versionText.setText(versionInfo);
+
+        new AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton(R.string.info_close, null)
+            .show();
     }
 
     private void startCamera() {
@@ -165,7 +220,6 @@ public class MainActivity extends AppCompatActivity {
 
                 runOnUiThread(() -> {
                     Toast.makeText(this, "照片已保存到系统相册", Toast.LENGTH_LONG).show();
-                    finish();
                 });
             } catch (Exception e) {
                 e.printStackTrace();
