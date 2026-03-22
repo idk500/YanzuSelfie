@@ -4,6 +4,7 @@ import android.Manifest;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -129,10 +130,24 @@ public class MainActivity extends AppCompatActivity {
     private void showInfoDialog() {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_info, null, false);
         TextView versionText = dialogView.findViewById(R.id.versionText);
+
+        String versionName = "unknown";
+        long versionCode = 0;
+        try {
+            PackageInfo packageInfo = getPackageManager().getPackageInfo(getPackageName(), 0);
+            versionName = packageInfo.versionName;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                versionCode = packageInfo.getLongVersionCode();
+            } else {
+                versionCode = packageInfo.versionCode;
+            }
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
+
         String versionInfo = getString(
             R.string.version_format,
-            BuildConfig.VERSION_NAME,
-            BuildConfig.VERSION_CODE
+            versionName,
+            versionCode
         );
         versionText.setText(versionInfo);
 
