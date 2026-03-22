@@ -1,19 +1,21 @@
 package com.yanzuselfie.app;
 
 import android.Manifest;
+import android.content.ContentValues;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
+import android.provider.MediaStore;
 import android.view.WindowManager;
 import android.widget.Button;
-import android.widget.ImageView;
 import android.widget.Toast;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.*;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -22,8 +24,6 @@ import androidx.core.content.ContextCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.OutputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -37,7 +37,9 @@ public class MainActivity extends AppCompatActivity {
     private PreviewView previewView;
     private Bitmap yanzuBitmap;
 
-    private final String[] REQUIRED_PERMISSIONS = new String[]{Manifest.permission.CAMERA};
+    private final String[] REQUIRED_PERMISSIONS = Build.VERSION.SDK_INT <= Build.VERSION_CODES.P
+        ? new String[]{Manifest.permission.CAMERA, Manifest.permission.WRITE_EXTERNAL_STORAGE}
+        : new String[]{Manifest.permission.CAMERA};
     private ActivityResultLauncher<String[]> activityResultLauncher;
 
     @Override
@@ -110,25 +112,54 @@ public class MainActivity extends AppCompatActivity {
 
     private void saveYanzuPhoto() {
         new Thread(() -> {
+            Uri imageUri = null;
             try {
-                File picturesDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
-                if (!picturesDir.exists()) {
-                    picturesDir.mkdirs();
+                if (yanzuBitmap == null) {
+                    throw new IllegalStateException("图片资源加载失败");
                 }
 
                 String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(new Date());
-                File imageFile = new File(picturesDir, "YanzuSelfie_" + timestamp + ".jpg");
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, "YanzuSelfie_" + timestamp + ".jpg");
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+                values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/YanzuSelfie");
 
-                OutputStream fos = new FileOutputStream(imageFile);
-                yanzuBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                }
+
+                imageUri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (imageUri == null) {
+                    throw new IllegalStateException("创建相册条目失败");
+                }
+
+                OutputStream fos = getContentResolver().openOutputStream(imageUri);
+                if (fos == null) {
+                    throw new IllegalStateException("无法打开输出流");
+                }
+
+                boolean success = yanzuBitmap.compress(Bitmap.CompressFormat.JPEG, 100, fos);
                 fos.flush();
                 fos.close();
+                if (!success) {
+                    throw new IllegalStateException("图片写入失败");
+                }
+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues done = new ContentValues();
+                    done.put(MediaStore.Images.Media.IS_PENDING, 0);
+                    getContentResolver().update(imageUri, done, null, null);
+                }
 
                 runOnUiThread(() -> {
-                    Toast.makeText(this, "照片已保存: " + imageFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
+                    Toast.makeText(this, "照片已保存到系统相册", Toast.LENGTH_LONG).show();
+                    finish();
                 });
             } catch (Exception e) {
                 e.printStackTrace();
+                if (imageUri != null) {
+                    getContentResolver().delete(imageUri, null, null);
+                }
                 runOnUiThread(() -> {
                     Toast.makeText(this, "保存失败", Toast.LENGTH_SHORT).show();
                 });
