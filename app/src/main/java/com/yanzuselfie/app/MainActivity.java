@@ -5,6 +5,7 @@ import android.content.ContentValues;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -53,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
         previewView = findViewById(R.id.previewView);
         Button captureButton = findViewById(R.id.captureButton);
 
-        yanzuBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.yanzu);
+        yanzuBitmap = BitmapFactory.decodeResource(getResources(), R.drawable.logo_yanzu);
 
         cameraExecutor = Executors.newSingleThreadExecutor();
 
@@ -113,6 +114,7 @@ public class MainActivity extends AppCompatActivity {
     private void saveYanzuPhoto() {
         new Thread(() -> {
             Uri imageUri = null;
+            String legacyFilePath = null;
             try {
                 if (yanzuBitmap == null) {
                     throw new IllegalStateException("图片资源加载失败");
@@ -122,10 +124,18 @@ public class MainActivity extends AppCompatActivity {
                 ContentValues values = new ContentValues();
                 values.put(MediaStore.Images.Media.DISPLAY_NAME, "YanzuSelfie_" + timestamp + ".jpg");
                 values.put(MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
-                values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_PICTURES + "/YanzuSelfie");
 
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH, Environment.DIRECTORY_DCIM + "/Camera");
                     values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                } else {
+                    java.io.File cameraDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DCIM + "/Camera");
+                    if (!cameraDir.exists() && !cameraDir.mkdirs()) {
+                        throw new IllegalStateException("创建相册目录失败");
+                    }
+                    java.io.File imageFile = new java.io.File(cameraDir, "YanzuSelfie_" + timestamp + ".jpg");
+                    legacyFilePath = imageFile.getAbsolutePath();
+                    values.put(MediaStore.Images.Media.DATA, legacyFilePath);
                 }
 
                 imageUri = getContentResolver().insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
@@ -149,6 +159,8 @@ public class MainActivity extends AppCompatActivity {
                     ContentValues done = new ContentValues();
                     done.put(MediaStore.Images.Media.IS_PENDING, 0);
                     getContentResolver().update(imageUri, done, null, null);
+                } else if (legacyFilePath != null) {
+                    MediaScannerConnection.scanFile(this, new String[]{legacyFilePath}, new String[]{"image/jpeg"}, null);
                 }
 
                 runOnUiThread(() -> {
