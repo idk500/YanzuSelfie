@@ -12,15 +12,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
+          fetch-depth: 0
 
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
           java-version: '17'
 
+      - name: Debug info
+        run: |
+          echo "=== Java version ==="
+          java -version
+          echo "=== JAVA_HOME ==="
+          echo $JAVA_HOME
+          echo "=== Listing files ==="
+          ls -la
+          echo "=== gradlew exists ==="
+          test -f ./gradlew && echo "YES" || echo "NO"
+          echo "=== gradlew content first lines ==="
+          head -5 ./gradlew
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 7.5
 
       - name: Build with Gradle
         run: ./gradlew assembleDebug --stacktrace
