@@ -7,10 +7,13 @@ on:
 
 jobs:
   build:
-    runs-on: macos-latest
-
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Hello World
+        run: echo "Hello World"
+      
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Set up JDK
         uses: actions/setup-java@v4
@@ -19,5 +22,6 @@ jobs:
 
       - name: Build
         run: |
+          ls -la
           chmod +x gradlew
           ./gradlew assembleDebug
